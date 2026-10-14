@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dash to Safety</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d0d1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      border: 2px solid #3D3D6B;
+      border-radius: 4px;
+    }
+    #back-link {
+      margin-top: 12px;
+      color: #9E9E9E;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    #back-link:hover { color: #FFD600; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <a id="back-link" href="index.html">&larr; Back to Games</a>
+
+  <script>
+    // === CONSTANTS ===
+    const W = 800, H = 400;
+    const PLAYER_R = 15; // radius
+    const PLAYER_BBOX = 13; // half-side of AABB (26px total, 4px forgiveness)
+    const MAX_OBSTACLES = 4;
+    const TOTAL_DIST = 2000;
+    const FINISH_X = W - 60;
+
+    // Difficulty bands [minDist, scrollSpeed, spawnInterval, minH, maxH]
+    const BANDS = [
+      [0,    3, 80, 40, 100],
+      [400,  4, 70, 50, 120],
+      [800,  5, 60, 60, 140],
+      [1200, 6, 50, 70, 160],
+      [1600, 7, 45, 80, 180]
+    ];
+
+    // === STATE ===
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let gameState = 'start';
+    let player, obstacles, distance, lives, score;
+    let frameCount, spawnTimer, scrollSpeed, spawnInterval;
+    let invFrames, flashFrames, hitFlashTimer;
+    let ctaPulse = 0;
+    let finishLineX;
+
+    // === INPUT ===
+    const keys = {};
+    document.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if ((e.code === 'Space' || e.code === 'Enter') && gameState !== 'playing') startGame();
+      if (e.code === 'KeyP' && gameState === 'playing') togglePause();
+      if (gameState === 'playing') e.preventDefault();
+    });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // Touch controls
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const ty = (touch.clientY - rect.top) * (H / rect.height);
+      if (gameState !== 'playing') { startGame(); return; }
+      if (ty < H / 2) { keys['ArrowUp'] = true; keys['ArrowDown'] = false; }
+      else { keys['ArrowDown'] = true; keys['ArrowUp'] = false; }
+    }, { passive: false });
+    canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      keys['ArrowUp'] = false; keys['ArrowDown'] = false;
+    }, { passive: false });
+
+    // === INIT / RESET ===
+    function startGame() {
+      gameState = 'playing';
+      player = { x: 80, y: H / 2, inv: 0 };
+      obstacles = [];
+      distance = 0;
+      lives = 3;
+      score = 0;
+      frameCount = 0;
+      spawnTimer = 0;
+      hitFlashTimer = 0;
+      scrollSpeed = 3;
+      spawnInterval = 80;
+      finishLineX = W + 9999; // will be shown when distance near end
+    }
+
+    function togglePause() {
+      gameState = gameState === 'paused' ? 'playing' : 'paused';
+    }
+
+    // === DIFFICULTY ===
+    function getDifficulty() {
+      let band = BANDS[0];
+      for (let i = BANDS.length - 1; i >= 0; i--) {
+        if (distance >= BANDS[i][0]) { band = BANDS[i]; break; }
+      }
+      return band;
+    }
+
+    // === SPAWN ===
+    function spawnObstacle() {
+      if (obstacles.length >= MAX_OBSTACLES) return;
+      const band = getDifficulty();
+      const minH = band[3], maxH = band[4];
+      const h = minH + Math.random() * (maxH - minH);
+      const y = 20 + Math.random() * (H - h - 40);
+      obstacles.push({ x: W + 20, y, w: 20, h });
+    }
+
+    // === COLLISION ===
+    function rectIntersects(ax, ay, aw, ah, bx, by, bw, bh) {
+      return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+    }
+
+    function checkCollisions() {
+      if (player.inv > 0) return;
+      const px = player.x - PLAYER_BBOX, py = player.y - PLAYER_BBOX;
+      const ps = PLAYER_BBOX * 2;
+      for (let obs of obstacles) {
+        if (rectIntersects(px, py, ps, ps, obs.x, obs.y, obs.w, obs.h)) {
+          lives--;
+          player.inv = 60;
+          hitFlashTimer = 10;
+          if (lives <= 0) { gameState = 'lose'; }
+          return;
+        }
+      }
+    }
+
+    // === UPDATE ===
+    function update() {
+      frameCount++;
+      const band = getDifficulty();
+      scrollSpeed = band[1];
+      spawnInterval = band[2];
+
+      // Move player
+      if (keys['ArrowUp'] || keys['KeyW']) player.y -= 4;
+      if (keys['ArrowDown'] || keys['KeyS']) player.y += 4;
+      player.y = Math.max(PLAYER_R, Math.min(H - PLAYER_R, player.y));
+
+      // Distance
+      distance += scrollSpeed / 10;
+      score = Math.floor(distance);
+
+      // Win check
+      if (distance >= TOTAL_DIST) { gameState = 'win'; return; }
+
+      // Spawn obstacles
+      spawnTimer++;
+      if (spawnTimer >= spawnInterval) {
+        spawnObstacle();
+        spawnTimer = 0;
+      }
+
+      // Move obstacles
+      for (let obs of obstacles) obs.x -= scrollSpeed;
+      obstacles = obstacles.filter(o => o.x > -30);
+
+      // Invincibility countdown
+      if (player.inv > 0) player.inv--;
+      if (hitFlashTimer > 0) hitFlashTimer--;
+
+      // Collisions
+      checkCollisions();
+    }
+
+    // === DRAWING ===
+    function drawBackground() {
+      ctx.fillStyle = '#1A1A2E';
+      ctx.fillRect(0, 0, W, H);
+      // Lane lines
+      ctx.strokeStyle = '#3D3D6B';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([20, 15]);
+      for (let y = 80; y < H; y += 80) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    function drawFinishLine() {
+      // Show finish line when within last 600m of canvas (visual cue)
+      const remaining = TOTAL_DIST - distance;
+      if (remaining < 600) {
+        const fxPos = W - (600 - remaining) * (W / 600);
+        if (fxPos < W) {
+          ctx.strokeStyle = '#FFD600';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([10, 6]);
+          ctx.beginPath(); ctx.moveTo(fxPos, 0); ctx.lineTo(fxPos, H); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#FFD600';
+          ctx.font = 'bold 14px Arial';
+          ctx.fillText('FINISH', fxPos + 5, 20);
+        }
+      }
+    }
+
+    function drawPlayer() {
+      if (player.inv > 0 && Math.floor(player.inv / 10) % 2 === 0) return; // flash
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, PLAYER_R, 0, Math.PI * 2);
+      ctx.fillStyle = '#00E676';
+      ctx.fill();
+      ctx.strokeStyle = '#00BF5A';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawObstacles() {
+      for (let obs of obstacles) {
+        ctx.fillStyle = '#FF1744';
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeStyle = '#B71C1C';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+      }
+    }
+
+    function drawHUD() {
+      // Lives
+      ctx.font = 'bold 16px Arial';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText('LIVES:', 10, 22);
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i < lives ? '#FF1744' : '#3D3D6B';
+        ctx.font = '18px Arial';
+        ctx.fillText('\u2665', 68 + i * 22, 22);
+      }
+      // Distance
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 16px Arial';
+      const distText = score + 'm / 2000m';
+      const distW = ctx.measureText(distText).width;
+      ctx.fillText(distText, W / 2 - distW / 2, 22);
+      // Progress bar
+      const barW = 200, barH = 10;
+      const barX = W / 2 - barW / 2, barY = 30;
+      ctx.fillStyle = '#3D3D6B';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#00E676';
+      ctx.fillRect(barX, barY, barW * (distance / TOTAL_DIST), barH);
+      // Speed indicator
+      ctx.fillStyle = '#9E9E9E';
+      ctx.font = '12px Arial';
+      ctx.fillText('SPD ' + scrollSpeed, W - 60, 22);
+    }
+
+    function drawHitFlash() {
+      if (hitFlashTimer > 0) {
+        ctx.fillStyle = 'rgba(255,23,68,0.20)';
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    function drawStartScreen() {
+      ctx.fillStyle = '#1A1A2E';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 36px Arial';
+      const t1 = 'DASH TO SAFETY';
+      ctx.fillText(t1, W / 2 - ctx.measureText(t1).width / 2, H / 2 - 60);
+      ctx.fillStyle = '#9E9E9E';
+      ctx.font = '16px Arial';
+      const t2 = 'Dodge obstacles — reach 2000m with 3 lives';
+      ctx.fillText(t2, W / 2 - ctx.measureText(t2).width / 2, H / 2 - 20);
+      const t3 = '\u2191\u2193 Arrow Keys / W S to move   |   P to pause';
+      ctx.fillText(t3, W / 2 - ctx.measureText(t3).width / 2, H / 2 + 10);
+      ctaPulse += 0.05;
+      ctx.fillStyle = `rgba(255,214,0,${0.6 + 0.4 * Math.sin(ctaPulse)})`;
+      ctx.font = 'bold 14px Arial';
+      const cta = 'PRESS SPACE OR TAP TO START';
+      ctx.fillText(cta, W / 2 - ctx.measureText(cta).width / 2, H / 2 + 55);
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = 'rgba(26,26,46,0.92)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#FFD600';
+      ctx.font = 'bold 36px Arial';
+      const t1 = 'YOU ESCAPED!';
+      ctx.fillText(t1, W / 2 - ctx.measureText(t1).width / 2, H / 2 - 50);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '18px Arial';
+      const t2 = 'Distance: ' + score + 'm   Lives remaining: ' + lives;
+      ctx.fillText(t2, W / 2 - ctx.measureText(t2).width / 2, H / 2);
+      ctaPulse += 0.05;
+      ctx.fillStyle = `rgba(255,214,0,${0.6 + 0.4 * Math.sin(ctaPulse)})`;
+      ctx.font = 'bold 14px Arial';
+      const cta = 'PRESS SPACE OR TAP TO PLAY AGAIN';
+      ctx.fillText(cta, W / 2 - ctx.measureText(cta).width / 2, H / 2 + 50);
+    }
+
+    function drawLoseScreen() {
+      ctx.fillStyle = 'rgba(26,10,10,0.92)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#FF1744';
+      ctx.font = 'bold 36px Arial';
+      const t1 = 'GAME OVER';
+      ctx.fillText(t1, W / 2 - ctx.measureText(t1).width / 2, H / 2 - 50);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '18px Arial';
+      const t2 = 'You reached ' + score + 'm of 2000m';
+      ctx.fillText(t2, W / 2 - ctx.measureText(t2).width / 2, H / 2);
+      ctaPulse += 0.05;
+      ctx.fillStyle = `rgba(255,214,0,${0.6 + 0.4 * Math.sin(ctaPulse)})`;
+      ctx.font = 'bold 14px Arial';
+      const cta = 'PRESS SPACE OR TAP TO TRY AGAIN';
+      ctx.fillText(cta, W / 2 - ctx.measureText(cta).width / 2, H / 2 + 50);
+    }
+
+    function drawPauseOverlay() {
+      ctx.fillStyle = 'rgba(26,26,46,0.80)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 30px Arial';
+      const t = 'PAUSED';
+      ctx.fillText(t, W / 2 - ctx.measureText(t).width / 2, H / 2);
+      ctx.fillStyle = '#9E9E9E';
+      ctx.font = '14px Arial';
+      const s = 'Press P to resume';
+      ctx.fillText(s, W / 2 - ctx.measureText(s).width / 2, H / 2 + 30);
+    }
+
+    function draw() {
+      drawBackground();
+      drawFinishLine();
+      drawObstacles();
+      drawPlayer();
+      drawHUD();
+      drawHitFlash();
+    }
+
+    // === GAME LOOP ===
+    function gameLoop() {
+      requestAnimationFrame(gameLoop);
+      ctx.clearRect(0, 0, W, H);
+      switch (gameState) {
+        case 'start':  drawStartScreen(); break;
+        case 'playing': update(); draw(); break;
+        case 'win':   drawWinScreen(); break;
+        case 'lose':  drawLoseScreen(); break;
+        case 'paused': draw(); drawPauseOverlay(); break;
+      }
+    }
+
+    // === BOOT ===
+    gameLoop();
+  </script>
+</body>
+</html>
