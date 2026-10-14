@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser Escape Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d0d1a;
+      color: #FFFFFF;
+      font-family: Arial, Helvetica, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      padding: 40px 20px 20px;
+      text-align: center;
+      border-bottom: 1px solid #3D3D6B;
+    }
+    header h1 {
+      font-size: clamp(22px, 5vw, 40px);
+      color: #FFD600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    header p {
+      color: #9E9E9E;
+      margin-top: 8px;
+      font-size: 15px;
+    }
+    .games-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+      padding: 40px 20px;
+      max-width: 900px;
+      width: 100%;
+    }
+    .game-card {
+      background: #1A1A2E;
+      border: 1px solid #3D3D6B;
+      border-radius: 8px;
+      width: 380px;
+      max-width: 100%;
+      overflow: hidden;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: #FFD600;
+    }
+    .card-preview {
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .preview-g1 { background: linear-gradient(135deg, #1A1A2E 0%, #0d1a2e 100%); }
+    .preview-g2 { background: linear-gradient(180deg, #1A0A0A 0%, #1A1A2E 100%); }
+    .preview-icon {
+      font-size: 64px;
+      opacity: 0.75;
+    }
+    .card-badge {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: rgba(255,214,0,0.15);
+      border: 1px solid #FFD600;
+      color: #FFD600;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+    }
+    .card-body { padding: 20px; }
+    .card-body h2 {
+      font-size: 20px;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+    }
+    .card-body p {
+      font-size: 13px;
+      color: #9E9E9E;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+    .card-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid #3D3D6B;
+      color: #9E9E9E;
+    }
+    .tag.green { border-color: #00E676; color: #00E676; }
+    .tag.blue { border-color: #2979FF; color: #2979FF; }
+    .play-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      text-align: center;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 5px;
+      letter-spacing: 1px;
+      transition: filter 0.15s;
+    }
+    .play-btn:hover { filter: brightness(1.15); }
+    .play-btn.g1 { background: #00E676; color: #0d0d1a; }
+    .play-btn.g2 { background: #2979FF; color: #FFFFFF; }
+    .controls-section {
+      width: 100%;
+      max-width: 900px;
+      padding: 0 20px 40px;
+    }
+    .controls-section h2 {
+      font-size: 18px;
+      color: #FFD600;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .controls-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .ctrl-card {
+      background: #1A1A2E;
+      border: 1px solid #3D3D6B;
+      border-radius: 6px;
+      padding: 16px;
+      flex: 1;
+      min-width: 220px;
+    }
+    .ctrl-card h3 { font-size: 15px; margin-bottom: 10px; color: #FFFFFF; }
+    .ctrl-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #3D3D6B; }
+    .ctrl-row:last-child { border-bottom: none; }
+    .ctrl-key { color: #FFD600; font-weight: bold; }
+    .ctrl-desc { color: #9E9E9E; }
+    footer {
+      width: 100%;
+      padding: 20px;
+      text-align: center;
+      border-top: 1px solid #3D3D6B;
+      color: #3D3D6B;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>&#9654; Browser Escape Games</h1>
+    <p>Two fast-paced obstacle games. No install. No login. Just play.</p>
+  </header>
+
+  <div class="games-grid">
+    <!-- Game 1 Card -->
+    <div class="game-card">
+      <div class="card-preview preview-g1">
+        <span class="preview-icon">&#9654;</span>
+        <div class="card-badge">HORIZONTAL</div>
+      </div>
+      <div class="card-body">
+        <h2>Dash to Safety</h2>
+        <p>Scroll forward as red obstacles rush in from the right. Dodge up and down, keep your 3 lives intact, and cross the 2000m finish line.</p>
+        <div class="card-meta">
+          <span class="tag green">Green Runner</span>
+          <span class="tag">UP / DOWN</span>
+          <span class="tag">2000m Goal</span>
+          <span class="tag">5 Difficulty Levels</span>
+        </div>
+        <a href="game1.html" class="play-btn g1">PLAY NOW &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Game 2 Card -->
+    <div class="game-card">
+      <div class="card-preview preview-g2">
+        <span class="preview-icon">&#9660;</span>
+        <div class="card-badge">VERTICAL</div>
+      </div>
+      <div class="card-body">
+        <h2>Vertical Escape</h2>
+        <p>Coloured debris rains down from above. Slide left and right to survive 60 seconds. The longer you last, the faster it falls.</p>
+        <div class="card-meta">
+          <span class="tag blue">Blue Shield</span>
+          <span class="tag">LEFT / RIGHT</span>
+          <span class="tag">60s Survival</span>
+          <span class="tag">5 Difficulty Levels</span>
+        </div>
+        <a href="game2.html" class="play-btn g2">PLAY NOW &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-section">
+    <h2>Controls</h2>
+    <div class="controls-grid">
+      <div class="ctrl-card">
+        <h3>&#9654; Dash to Safety</h3>
+        <div class="ctrl-row"><span class="ctrl-key">&uarr; / W</span><span class="ctrl-desc">Move up</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">&darr; / S</span><span class="ctrl-desc">Move down</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">SPACE</span><span class="ctrl-desc">Start / Restart</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">P</span><span class="ctrl-desc">Pause / Resume</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">Tap Top / Bottom</span><span class="ctrl-desc">Mobile move</span></div>
+      </div>
+      <div class="ctrl-card">
+        <h3>&#9660; Vertical Escape</h3>
+        <div class="ctrl-row"><span class="ctrl-key">&larr; / A</span><span class="ctrl-desc">Move left</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">&rarr; / D</span><span class="ctrl-desc">Move right</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">SPACE</span><span class="ctrl-desc">Start / Restart</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">P</span><span class="ctrl-desc">Pause / Resume</span></div>
+        <div class="ctrl-row"><span class="ctrl-key">Tap Left / Right</span><span class="ctrl-desc">Mobile move</span></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Browser Escape Games &mdash; Built with vanilla HTML5 Canvas &amp; JavaScript</footer>
+</body>
+</html>
